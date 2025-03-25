@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import dotenv from "dotenv";
 import { writeFileSync } from "fs";
 import fetch, { RequestInit } from "node-fetch";

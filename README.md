@@ -1,6 +1,6 @@
 # Jira Worklog Tracker
 
-A TypeScript CLI tool that fetches worklog updates from Jira for the past week (Monday–Sunday), groups them by author and ticket, and prints a summary table with the total time spent per ticket.
+A simple CLI tool that fetches worklog updates from Jira for the past week (Monday–Sunday), groups them by author and ticket, and prints a summary table with the total time spent per ticket.
 
 ## Prerequisites
 
@@ -9,17 +9,9 @@ A TypeScript CLI tool that fetches worklog updates from Jira for the past week (
 - **Jira API Token:** Create one at [Atlassian API Tokens](https://id.atlassian.com/manage/api-tokens).
 - **Atlassian Domain:** (e.g., `your-domain.atlassian.net`).
 
-## Installation
-
-```bash
-git clone <repository-url>
-cd jira-worklog
-npm install
-```
-
 ## Configuration
 
-Create a .env file in the project root with the following environment variables:
+Create a .env file in the folder where you will use the commands.
 
 ```bash
 EMAIL=your-email@example.com
@@ -32,8 +24,7 @@ JIRA_DOMAIN=your-domain.atlassian.net
 Shows the summary table and optionally saves it as a CSV file:
 
 ```bash
-npx ts-node --esm src/index.ts
-npx ts-node --esm src/index.ts --csv output.csv
+npx jira-worklog --csv output.csv
 ```
 
 ## Example Output

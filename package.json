@@ -1,20 +1,38 @@
 {
   "name": "jira-worklog-tracker",
   "version": "1.0.0",
-  "description": "",
+  "description": "A simple CLI tool that fetches worklog updates from Jira for the past week (Monday–Sunday), groups them by author and ticket, and prints a summary table with the total time spent per ticket.",
   "main": "src/index.ts",
   "type": "module",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "keywords": [
+    "Jira",
+    "worklog",
+    "administration",
+    "tracking",
+    "business"
+  ],
+  "author": {
+    "name": "Peter Polman",
+    "email": "peter@peterpolman.nl"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "devDependencies": {
-    "@types/node": "^22.13.13",
-    "dotenv": "^16.4.7"
+  "license": "MIT",
+  "bin": {
+    "jira-worklog": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
+    "dotenv": "^16.4.7",
     "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.2"
   }
 }
