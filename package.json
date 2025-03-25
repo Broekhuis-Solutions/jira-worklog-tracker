@@ -1,6 +1,6 @@
 {
   "name": "jira-worklog-tracker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple CLI tool that fetches worklog updates from Jira for the past week (Monday–Sunday), groups them by author and ticket, and prints a summary table with the total time spent per ticket.",
   "main": "src/index.ts",
   "type": "module",
