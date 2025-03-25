@@ -1,4 +1,4 @@
-# Jira Worklog Summary Tool
+# Jira Worklog Tracker
 
 A TypeScript CLI tool that fetches worklog updates from Jira for the past week (Monday–Sunday), groups them by author and ticket, and prints a summary table with the total time spent per ticket.
 
