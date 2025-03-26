@@ -14,8 +14,8 @@ A simple CLI tool that fetches worklog updates from Jira for the past week (Mond
 Create a .env file in the folder where you will use the commands.
 
 ```bash
-EMAIL=your-email@example.com
-API_TOKEN=your-api-token
+JIRA_EMAIL=your-email@example.com
+JIRA_API_TOKEN=your-api-token
 JIRA_DOMAIN=your-domain.atlassian.net
 ```
 
