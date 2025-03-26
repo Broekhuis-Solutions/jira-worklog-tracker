@@ -1,4 +1,14 @@
 #!/usr/bin/env node
+import console from "console";
+import {
+  endOfISOWeek,
+  format,
+  getISOWeek,
+  isWithinInterval,
+  parseISO,
+  setISOWeek,
+  startOfISOWeek,
+} from "date-fns";
 import dotenv from "dotenv";
 import { writeFileSync } from "fs";
 import fetch, { RequestInit } from "node-fetch";
@@ -75,60 +85,27 @@ export class APIClient {
 const client = new APIClient({ email, apiToken, jiraDomain });
 
 /**
- * Computes the start and end timestamps (in ms) for the past week,
- * defined as the Monday to Sunday period preceding the current week.
- */
-function getLastWeekRange(): { start: number; end: number } {
-  const today = new Date();
-  // Set today's date to midnight
-  const todayMidnight = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate()
-  );
-  // JS getDay(): Sunday = 0, Monday = 1, …, Saturday = 6.
-  // For calculation, treat Sunday as 7.
-  const dayOfWeek = todayMidnight.getDay() === 0 ? 7 : todayMidnight.getDay();
-  // Current week's Monday:
-  const currentMonday = new Date(todayMidnight);
-  currentMonday.setDate(todayMidnight.getDate() - (dayOfWeek - 1));
-  // Last week's Monday:
-  const lastWeekMonday = new Date(currentMonday);
-  lastWeekMonday.setDate(currentMonday.getDate() - 7);
-  // Last week's Sunday:
-  const lastWeekSunday = new Date(lastWeekMonday);
-  lastWeekSunday.setDate(lastWeekMonday.getDate() + 6);
-  // Set Sunday to end of day
-  lastWeekSunday.setHours(23, 59, 59, 999);
-
-  return { start: lastWeekMonday.getTime(), end: lastWeekSunday.getTime() };
-}
-
-/**
  * Recursively fetches worklog IDs updated within a given time window.
  * @param since Epoch timestamp (in ms) marking the start of the window.
- * @param until Epoch timestamp (in ms) marking the end of the window.
  * @param startAt Starting index for pagination.
  * @param maxResults Number of results per page.
  * @param accum Accumulated array of worklog IDs.
  * @returns Array of worklog IDs.
  */
-async function getWorklogUpdates(
+async function getWorklogUpdatesSince(
   since: number,
-  until: number,
   startAt = 0,
   maxResults = 100,
   accum: number[] = []
 ): Promise<number[]> {
-  const url = `https://${client.getJiraDomain()}/rest/api/3/worklog/updated?since=${since}&until=${until}&startAt=${startAt}&maxResults=${maxResults}`;
+  const url = `https://${client.getJiraDomain()}/rest/api/3/worklog/updated?since=${since}&startAt=${startAt}&maxResults=${maxResults}`;
   const data = await client.get<any>(url);
   const ids: number[] = data.values.map((w: any) => w.worklogId);
   const newAccum = accum.concat(ids);
 
   if (startAt + maxResults < data.total) {
-    return getWorklogUpdates(
+    return getWorklogUpdatesSince(
       since,
-      until,
       startAt + maxResults,
       maxResults,
       newAccum
@@ -143,12 +120,12 @@ async function getWorklogUpdates(
  * @param ids Array of worklog IDs.
  * @returns Array of worklog details.
  */
-async function getWorklogDetails(ids: number[]): Promise<any[]> {
+async function getWorklogs(ids: number[]): Promise<any[]> {
   const url = `https://${client.getJiraDomain()}/rest/api/3/worklog/list`;
   const logs = await client.post<any[]>(url, { ids });
   return logs.map((log: any) => ({
     id: log.id,
-    issueKey: log.issueId, // You might resolve this further if needed
+    issueId: log.issueId, // You might resolve this further if needed
     author: log.author.displayName,
     created: log.created,
     updated: log.updated,
@@ -161,96 +138,135 @@ async function getWorklogDetails(ids: number[]): Promise<any[]> {
   }));
 }
 
+/**
+ * Returns the value of a command-line argument.
+ * @param name The name of the argument.
+ * @returns The value of the argument, or an empty string if not found.
+ */
+const arg = (name: string) => {
+  const index = process.argv.findIndex((arg) => arg === `--${name}`);
+  if (index === -1) return "";
+  return process.argv[index + 1];
+};
+
+/**
+ * Computes the start and end timestamps (in ms) for the past week,
+ * @param weekNumber The week number (e.g., 11 for the 11th week of the year).
+ * @param year The year.
+ * @returns An object with `weekStart` and `weekEnd` properties, both of type `Date`.
+ */
+function getWeekRange(weekNumber: number, year: number) {
+  const january4th = new Date(year, 0, 4);
+  const dateInWeek = setISOWeek(january4th, weekNumber);
+  const weekStart = startOfISOWeek(dateInWeek);
+  const weekEnd = endOfISOWeek(dateInWeek);
+  return { weekStart, weekEnd };
+}
+
+/**
+ * Fetches full issue details for a list of issue IDs.
+ * @param issueIds Array of issue IDs.
+ * @returns Array of issue details.
+ */
+async function fetchIssues(issueIds: number[]): Promise<any[]> {
+  const jql = `id in (${issueIds.join(",")})`;
+  const url = `https://${client.getJiraDomain()}/rest/api/3/search?jql=${encodeURIComponent(
+    jql
+  )}&fields=components`;
+  const data = await client.get<any>(url);
+  return data.issues;
+}
+
+/**
+ * Parses a duration string (e.g., "5m", "1h", "2d") into hours.
+ * @param duration The duration string.
+ * @returns The duration in hours.
+ */
+function parseDurationToHours(duration: string) {
+  duration = duration.trim();
+  if (duration.endsWith("h")) {
+    return parseFloat(duration.slice(0, -1));
+  } else if (duration.endsWith("m")) {
+    return parseFloat(duration.slice(0, -1)) / 60;
+  } else if (duration.endsWith("d")) {
+    return parseFloat(duration.slice(0, -1)) * 24;
+  }
+  return 0;
+}
+
 (async () => {
   try {
-    // Get the past week's Monday and Sunday timestamps
-    const { start: weekStart, end: weekEnd } = getLastWeekRange();
-    console.log(
-      `Fetching worklog updates between ${new Date(
-        weekStart
-      ).toISOString()} and ${new Date(weekEnd).toISOString()}`
-    );
+    const date = new Date();
+    const currentWeek = getISOWeek(date);
+    const givenWeek = arg("week");
+    const weekNumber = givenWeek ? parseInt(givenWeek) : currentWeek;
 
     // Fetch all worklog IDs updated in that time window
-    const worklogIds = await getWorklogUpdates(weekStart, weekEnd);
-    console.log(`\n🔍 Found ${worklogIds.length} updated worklogs`);
+    const { weekStart, weekEnd } = getWeekRange(weekNumber, date.getFullYear());
+    const worklogIds = await getWorklogUpdatesSince(weekStart.getTime());
 
-    const chunkSize = 100;
-    const allLogs: any[] = [];
-
-    // Process worklog IDs in chunks
-    for (let i = 0; i < worklogIds.length; i += chunkSize) {
-      const chunk = worklogIds.slice(i, i + chunkSize);
-      const logs = await getWorklogDetails(chunk);
-      allLogs.push(...logs);
-      process.stdout.write(
-        `\rFetched ${allLogs.length}/${worklogIds.length} worklogs`
-      );
+    // Generate tableRows with each worklog as a row: author, resolved ticket, time spent, and comment.
+    const allLogs: any[] = await getWorklogs(worklogIds);
+    const filteredWorklogs = allLogs.filter((log) => {
+      const updatedDate = parseISO(log.updated);
+      return isWithinInterval(updatedDate, { start: weekStart, end: weekEnd });
+    });
+    if (!filteredWorklogs.length) {
+      throw new Error(`No worklogs found for week ${weekNumber}`);
     }
 
-    function parseTimeSpent(timeSpent: string): number {
-      const trimmed = timeSpent.trim();
-      if (trimmed.endsWith("m")) {
-        return parseFloat(trimmed.slice(0, -1));
-      } else if (trimmed.endsWith("h")) {
-        return parseFloat(trimmed.slice(0, -1)) * 60;
-      } else if (trimmed.endsWith("d")) {
-        return parseFloat(trimmed.slice(0, -1)) * 8 * 60; // assuming 8h per day
-      }
-      return 0;
-    }
-
-    const ticketCache: { [issueId: string]: string } = {};
-    async function fetchTicketKey(issueId: string): Promise<string> {
-      if (ticketCache[issueId]) return ticketCache[issueId];
-      const url = `https://${client.getJiraDomain()}/rest/api/3/issue/${issueId}`;
-      const issueData = await client.get<any>(url);
-      ticketCache[issueId] = issueData.key;
-      return issueData.key;
-    }
-
-    const groupedByAuthorAndIssue = allLogs.reduce((acc, log) => {
-      const author = log.author;
-      const issueId = log.issueKey; // using the internal issue identifier
-      const timeSpentMinutes = parseTimeSpent(log.timeSpent);
-      if (!acc[author]) {
-        acc[author] = {};
-      }
-      if (!acc[author][issueId]) {
-        acc[author][issueId] = 0;
-      }
-      acc[author][issueId] += timeSpentMinutes;
-      return acc;
-    }, {} as { [author: string]: { [issueId: string]: number } });
+    console.log(
+      `\n🔍 Found ${filteredWorklogs.length} updated worklogs for week ${weekNumber}`
+    );
 
     const tableRows: {
       author: string;
-      ticket: string;
-      totalTimeSpentMinutes: number;
+      issueKey: string;
+      issueComponents: string;
+      hoursSpent: number;
+      started: string;
+      updated: string;
+      comment: string;
     }[] = [];
-    for (const author in groupedByAuthorAndIssue) {
-      for (const issueId in groupedByAuthorAndIssue[author]) {
-        const totalTime = groupedByAuthorAndIssue[author][issueId];
-        const ticket = await fetchTicketKey(issueId);
-        tableRows.push({ author, ticket, totalTimeSpentMinutes: totalTime });
-      }
+    const uniqueIssueIds = [
+      ...new Set(filteredWorklogs.map((log) => log.issueId)),
+    ];
+    const issues = await fetchIssues(uniqueIssueIds);
+
+    for (const log of filteredWorklogs) {
+      const issue = issues.find((issue) => issue.id === log.issueId);
+      const issueComponents = issue?.fields?.components
+        ?.map((component: { name: string }) => component.name)
+        .join(", ");
+
+      tableRows.push({
+        author: log.author,
+        issueKey: issue.key,
+        issueComponents,
+        hoursSpent: parseDurationToHours(log.timeSpent),
+        started: format(log.started, "Pp"),
+        updated: format(log.updated, "Pp"),
+        comment: log.comment,
+      });
     }
-    console.log("\n");
+
+    // Log the worklogs in a table
     console.table(tableRows);
 
-    const csvArgIndex = process.argv.findIndex((arg) => arg === "--csv");
-    if (csvArgIndex !== -1 && process.argv[csvArgIndex + 1]) {
-      const csvFilePath = process.argv[csvArgIndex + 1];
-      const csvHeader = "Author,Ticket,TotalTimeSpentMinutes";
-      const csvRows = tableRows.map(
-        (row) => `"${row.author}","${row.ticket}",${row.totalTimeSpentMinutes}`
-      );
-      const csvContent = [csvHeader, ...csvRows].join("\n");
-      writeFileSync(csvFilePath, csvContent, "utf8");
+    // Check for CSV output argument and write the data as CSV if provided
+    const csvFilePath = arg("csv");
+    const filename = `w${weekNumber}.csv`;
+    const csvHeader =
+      "Author,IssueKey,IssueComponents,HoursSpent,Started,Updated,Comment";
+    const csvRows = tableRows.map(
+      (row) =>
+        `"${row.author}","${row.issueKey}","${row.issueComponents}","${row.hoursSpent}","${row.started}","${row.updated}","${row.comment}"`
+    );
+    const csvContent = [csvHeader, ...csvRows].join("\n");
+    writeFileSync(csvFilePath || filename, csvContent, "utf8");
 
-      console.log(`CSV saved to ${csvFilePath}`);
-    }
+    console.log(`CSV saved to: ${csvFilePath || filename}`);
   } catch (err) {
-    console.error("❌ Error:", err);
+    console.error("\n❌ Error:", err);
   }
 })();
