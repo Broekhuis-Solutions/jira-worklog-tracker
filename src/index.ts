@@ -223,7 +223,8 @@ function parseDurationToHours(duration: string) {
       author: string;
       issueKey: string;
       issueComponents: string;
-      hoursSpent: number;
+      parent: string;
+      hoursSpent: string;
       started: string;
       updated: string;
       comment: string;
@@ -232,7 +233,7 @@ function parseDurationToHours(duration: string) {
       ...new Set(filteredWorklogs.map((log) => log.issueId)),
     ];
     const issues = await fetchIssues(uniqueIssueIds);
-
+    console.log(issues);
     for (const log of filteredWorklogs) {
       const issue = issues.find((issue) => issue.id === log.issueId);
       const issueComponents = issue?.fields?.components
@@ -243,7 +244,14 @@ function parseDurationToHours(duration: string) {
         author: log.author,
         issueKey: issue.key,
         issueComponents,
-        hoursSpent: parseDurationToHours(log.timeSpent),
+        parent: issue.parent?.key,
+        hoursSpent: parseDurationToHours(log.timeSpent).toLocaleString(
+          "nl-nl",
+          {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }
+        ),
         started: format(log.started, "Pp"),
         updated: format(log.updated, "Pp"),
         comment: log.comment,
@@ -255,17 +263,19 @@ function parseDurationToHours(duration: string) {
 
     // Check for CSV output argument and write the data as CSV if provided
     const csvFilePath = arg("csv");
-    const filename = `w${weekNumber}.csv`;
-    const csvHeader =
-      "Author,IssueKey,IssueComponents,HoursSpent,Started,Updated,Comment";
-    const csvRows = tableRows.map(
-      (row) =>
-        `"${row.author}","${row.issueKey}","${row.issueComponents}","${row.hoursSpent}","${row.started}","${row.updated}","${row.comment}"`
-    );
-    const csvContent = [csvHeader, ...csvRows].join("\n");
-    writeFileSync(csvFilePath || filename, csvContent, "utf8");
+    if (csvFilePath) {
+      const filename = `w${weekNumber}.csv`;
+      const csvHeader =
+        "Author,IssueKey,IssueComponents,Parent,HoursSpent,Started,Updated,Comment";
+      const csvRows = tableRows.map(
+        (row) =>
+          `"${row.author}","${row.issueKey}","${row.issueComponents}","${row.parent}","${row.hoursSpent}","${row.started}","${row.updated}","${row.comment}"`
+      );
+      const csvContent = [csvHeader, ...csvRows].join("\n");
+      writeFileSync(csvFilePath || filename, csvContent, "utf8");
 
-    console.log(`CSV saved to: ${csvFilePath || filename}`);
+      console.log(`CSV saved to: ${csvFilePath || filename}`);
+    }
   } catch (err) {
     console.error("\n❌ Error:", err);
   }
