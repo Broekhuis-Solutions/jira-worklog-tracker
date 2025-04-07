@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import console from "console";
 import {
   endOfISOWeek,
   format,
@@ -12,6 +11,7 @@ import {
 import dotenv from "dotenv";
 import { writeFileSync } from "fs";
 import fetch, { RequestInit } from "node-fetch";
+import parseDuration from "parse-duration";
 
 dotenv.config();
 
@@ -177,23 +177,6 @@ async function fetchIssues(issueIds: number[]): Promise<any[]> {
   return data.issues;
 }
 
-/**
- * Parses a duration string (e.g., "5m", "1h", "2d") into hours.
- * @param duration The duration string.
- * @returns The duration in hours.
- */
-function parseDurationToHours(duration: string) {
-  duration = duration.trim();
-  if (duration.endsWith("h")) {
-    return parseFloat(duration.slice(0, -1));
-  } else if (duration.endsWith("m")) {
-    return parseFloat(duration.slice(0, -1)) / 60;
-  } else if (duration.endsWith("d")) {
-    return parseFloat(duration.slice(0, -1)) * 24;
-  }
-  return 0;
-}
-
 (async () => {
   try {
     const date = new Date();
@@ -218,6 +201,7 @@ function parseDurationToHours(duration: string) {
     console.log(
       `\n🔍 Found ${filteredWorklogs.length} updated worklogs for week ${weekNumber}`
     );
+    const ms = 5400000; //  1.5 hours in milliseconds
 
     const tableRows: {
       author: string;
@@ -239,17 +223,16 @@ function parseDurationToHours(duration: string) {
         ?.map((component: { name: string }) => component.name)
         .join(", ");
 
+      const duration = parseDuration(log.timeSpent) ?? 0;
+      const hoursSpent = duration / (1000 * 60 * 60);
       tableRows.push({
         author: log.author,
         issueKey: issue.key,
         issueComponents,
-        hoursSpent: parseDurationToHours(log.timeSpent).toLocaleString(
-          "nl-nl",
-          {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }
-        ),
+        hoursSpent: hoursSpent.toLocaleString("nl-nl", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
         started: format(log.started, "Pp"),
         updated: format(log.updated, "Pp"),
         comment: log.comment,
