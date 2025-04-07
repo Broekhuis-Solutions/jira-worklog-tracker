@@ -208,8 +208,8 @@ function parseDurationToHours(duration: string) {
     // Generate tableRows with each worklog as a row: author, resolved ticket, time spent, and comment.
     const allLogs: any[] = await getWorklogs(worklogIds);
     const filteredWorklogs = allLogs.filter((log) => {
-      const updatedDate = parseISO(log.updated);
-      return isWithinInterval(updatedDate, { start: weekStart, end: weekEnd });
+      const startedDate = parseISO(log.started);
+      return isWithinInterval(startedDate, { start: weekStart, end: weekEnd });
     });
     if (!filteredWorklogs.length) {
       throw new Error(`No worklogs found for week ${weekNumber}`);
