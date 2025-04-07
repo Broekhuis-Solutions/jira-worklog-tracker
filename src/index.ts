@@ -169,11 +169,13 @@ function getWeekRange(weekNumber: number, year: number) {
  * @returns Array of issue details.
  */
 async function fetchIssues(issueIds: number[]): Promise<any[]> {
-  const jql = `id in (${issueIds.join(",")})`;
-  const url = `https://${client.getJiraDomain()}/rest/api/3/search?jql=${encodeURIComponent(
-    jql
-  )}&fields=components`;
-  const data = await client.get<any>(url);
+  const data = await client.post<any>(
+    `https://${client.getJiraDomain()}/rest/api/3/search/jql`,
+    {
+      jql: `id in (${issueIds.join(",")})`,
+      fields: ["summary", "parent", "components"],
+    }
+  );
   return data.issues;
 }
 
@@ -206,6 +208,8 @@ async function fetchIssues(issueIds: number[]): Promise<any[]> {
     const tableRows: {
       author: string;
       issueKey: string;
+      summary: string;
+      parent: string;
       issueComponents: string;
       hoursSpent: string;
       started: string;
@@ -228,6 +232,8 @@ async function fetchIssues(issueIds: number[]): Promise<any[]> {
       tableRows.push({
         author: log.author,
         issueKey: issue.key,
+        summary: issue.fields.summary,
+        parent: issue.fields.parent?.fields.summary,
         issueComponents,
         hoursSpent: hoursSpent.toLocaleString("nl-nl", {
           minimumFractionDigits: 2,
@@ -246,10 +252,10 @@ async function fetchIssues(issueIds: number[]): Promise<any[]> {
     const csvFilePath = arg("csv");
     const filename = `w${weekNumber}.csv`;
     const csvHeader =
-      "Author,IssueKey,IssueComponents,HoursSpent,Started,Updated,Comment";
+      "Author;IssueKey;Summary;Parent;IssueComponents;HoursSpent;Started;Updated;Comment";
     const csvRows = tableRows.map(
       (row) =>
-        `"${row.author}","${row.issueKey}","${row.issueComponents}","${row.hoursSpent}","${row.started}","${row.updated}","${row.comment}"`
+        `"${row.author}";"${row.issueKey}";"${row.summary}";"${row.parent}";"${row.issueComponents}";"${row.hoursSpent}";"${row.started}";"${row.updated}";"${row.comment}"`
     );
     const csvContent = [csvHeader, ...csvRows].join("\n");
     writeFileSync(csvFilePath || filename, csvContent, "utf8");
