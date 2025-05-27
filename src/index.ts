@@ -231,9 +231,9 @@ async function fetchIssues(issueIds: number[]): Promise<any[]> {
       const hoursSpent = duration / (1000 * 60 * 60);
       tableRows.push({
         author: log.author,
-        issueKey: issue.key,
-        summary: issue.fields.summary,
-        parent: issue.fields.parent?.fields.summary,
+        issueKey: issue ? issue.key : "",
+        summary: issue ? issue.fields.summary : "",
+        parent: issue ? issue.fields.parent?.fields.summary : "",
         issueComponents,
         hoursSpent: hoursSpent.toLocaleString("nl-nl", {
           minimumFractionDigits: 2,
@@ -241,7 +241,7 @@ async function fetchIssues(issueIds: number[]): Promise<any[]> {
         }),
         started: format(log.started, "Pp"),
         updated: format(log.updated, "Pp"),
-        comment: log.comment,
+        comment: log.comment || "",
       });
     }
 
